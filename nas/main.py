@@ -8,6 +8,7 @@ import torch
 from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
+from nas.ofa.utils.run_config import DistributedImageNetRunConfig
 
 parser = argparse.ArgumentParser()
 # nas settings
@@ -135,11 +136,9 @@ if __name__ == "__main__":
     args.train_batch_size = args.batch_size
     args.test_batch_size = args.batch_size
 
-    ''' Hold
     run_config = DistributedImageNetRunConfig(
         **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
     )
-    '''
 
     '''
     DynamicSeparableConv2d
@@ -173,4 +172,3 @@ if __name__ == "__main__":
         expand_ratio_list = args.expand_list,
         width_mult_list = args.width_mult_list
     )
-
