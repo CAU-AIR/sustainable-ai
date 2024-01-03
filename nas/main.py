@@ -3,12 +3,16 @@ import random
 import argparse
 import numpy as np
 
+# multi gpu
+import horovod.torch as hvd
+
 import torch
 
 from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
-from nas.ofa.utils.run_config import DistributedImageNetRunConfig
+from ofa.utils.run_config import DistributedImageNetRunConfig
+from ofa.utils.distributed_run_manager import DistributedRunManager
 
 parser = argparse.ArgumentParser()
 # nas settings
@@ -17,10 +21,8 @@ parser.add_argument("--phase", type=int, default=1, choices=[1, 2]) # select pha
 
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument('--device', nargs='*', type=int, default=[0], help='cuda device, i.e. 0 or 0,1,2,3 or cpu') 
 parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--n_classes", type=int, default=1000)
-
 parser.add_argument("--resume", action="store_true")
 
 args = parser.parse_args()
@@ -83,27 +85,28 @@ args.not_sync_distributed_image_size = False
 args.momentum = 0.9
 args.no_nesterov = False
 
-args.dy_conv_scaling_mode = 1
 args.width_mult_list = "1.0"
+args.dy_conv_scaling_mode = 1
+
+args.fp16_allreduce = False
 
 
 ##########################
 if __name__ == "__main__":
+    os.makedirs(args.path, exist_ok=True)
+
+    # Initialize Horovod for Multi-GPU
+    hvd.init()
+
     # set random seed
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    device_ids = args.device
+    torch.cuda.set_device(hvd.local_rank())
 
-    if len(device_ids) > 1 and torch.cuda.device_count() > 1:
-        print('multi-gpu')
-    else:
-        torch.cuda.set_device(device_ids[0])
-        print('single-gpu')
-
-    num_gpus = len(device_ids)
+    num_gpus = hvd.size()
 
     # image size
     args.image_size = [int(img_size) for img_size in args.image_size.split(",")]
@@ -134,11 +137,17 @@ if __name__ == "__main__":
         args.warmup_lr = args.base_lr
 
     args.train_batch_size = args.batch_size
-    args.test_batch_size = args.batch_size
+    args.test_batch_size = args.batch_size * 2
 
     run_config = DistributedImageNetRunConfig(
         **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
     )
+
+    # # print run config information
+    # if hvd.rank() == 0:
+    #     print("Run config:")
+    #     for k, v in run_config.config.items():
+    #         print("\t%s: %s" % (k, v))
 
     '''
     DynamicSeparableConv2d
@@ -172,3 +181,18 @@ if __name__ == "__main__":
         expand_ratio_list = args.expand_list,
         width_mult_list = args.width_mult_list
     )
+
+    """ Distributed RunManager """
+    # Horovod: (optional) compression algorithm.
+    compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none # applies a compression method using 16-bit floating-point format
+    distributed_run_manager = DistributedRunManager(
+        args.path,
+        net,
+        run_config,
+        compression,
+        backward_steps=args.dynamic_batch_size,
+        is_root=(hvd.rank() == 0),
+    )
+    distributed_run_manager.save_config()
+    # hvd broadcast
+    distributed_run_manager.broadcast()

@@ -3,7 +3,7 @@
 # International Conference on Learning Representations (ICLR), 2020.
 
 from ofa.utils import calc_learning_rate, build_optimizer
-from nas.ofa.utils.imagenet import ImagenetDataProvider
+from ofa.utils.imagenet import ImagenetDataProvider
 
 __all__ = ["RunConfig", "ImagenetRunConfig", "DistributedImageNetRunConfig"]
 
