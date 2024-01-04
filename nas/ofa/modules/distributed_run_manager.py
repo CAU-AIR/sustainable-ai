@@ -61,7 +61,8 @@ class DistributedRunManager:
             init_models(self.net, self.run_config.model_init)
         if self.is_root:
             # print net info
-            net_info = get_net_info(self.net, self.run_config.data_provider.data_shape)
+            # net_info = get_net_info(self.net, self.run_config.data_provider.data_shape)
+            net_info = get_net_info(self.net, self.run_config.data_provider.data_shape, print_info=False)
             with open("%s/net_info.txt" % self.path, "w") as fout:
                 fout.write(json.dumps(net_info, indent=4) + "\n")
                 try:
@@ -469,7 +470,7 @@ class DistributedRunManager:
     def reset_running_statistics(
         self, net=None, subset_size=2000, subset_batch_size=200, data_loader=None
     ):
-        from ofa.imagenet_classification.elastic_nn.utils import set_running_statistics
+        from ofa.modules.elastic_utils import set_running_statistics
 
         if net is None:
             net = self.net

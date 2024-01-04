@@ -12,7 +12,7 @@ from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
 from ofa.utils.run_config import DistributedImageNetRunConfig
-from ofa.utils.distributed_run_manager import DistributedRunManager
+from ofa.modules.distributed_run_manager import DistributedRunManager
 
 parser = argparse.ArgumentParser()
 # nas settings
@@ -46,7 +46,8 @@ elif args.task == "depth":
         args.warmup_epochs = 0
         args.warmup_lr = -1
         args.ks_list = "3,5,7"
-        args.expand_list = "6"
+        # args.expand_list = "6"
+        args.expand_list = "1"
         args.depth_list = "3,4"
     else:
         args.n_epochs = 120
@@ -85,11 +86,14 @@ args.not_sync_distributed_image_size = False
 args.momentum = 0.9
 args.no_nesterov = False
 
+args.kd_ratio = 0.
 args.width_mult_list = "1.0"
 args.dy_conv_scaling_mode = 1
 
+args.teacher_model = None
 args.fp16_allreduce = False
 
+args.validation_frequency = 1
 
 ##########################
 if __name__ == "__main__":
@@ -196,3 +200,42 @@ if __name__ == "__main__":
     distributed_run_manager.save_config()
     # hvd broadcast
     distributed_run_manager.broadcast()
+
+    # training
+    from ofa.modules.progressive_shrinking import (
+        validate,
+        train,
+    )
+
+    validate_func_dict = {
+        "image_size_list": {224}
+        if isinstance(args.image_size, int)
+        else sorted({160, 224}),
+        "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
+        "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
+        "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
+    }
+    if args.task == "kernel":
+        validate_func_dict["ks_list"] = sorted(args.ks_list)
+
+        train(
+            distributed_run_manager,
+            args,
+            lambda _run_manager, epoch, is_test: validate(
+                _run_manager, epoch, is_test, **validate_func_dict
+            ),
+        )
+    elif args.task == "depth":
+        from ofa.modules.progressive_shrinking import (
+            train_elastic_depth,
+        )
+
+        train_elastic_depth(train, distributed_run_manager, args, validate_func_dict)
+    elif args.task == "expand":
+        from ofa.modules.progressive_shrinking import (
+            train_elastic_expand,
+        )
+
+        train_elastic_expand(train, distributed_run_manager, args, validate_func_dict)
+    else:
+        raise NotImplementedError

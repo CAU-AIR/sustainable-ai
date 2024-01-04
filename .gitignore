@@ -3,8 +3,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# models
+*.tar
+
+# config files
+*.config
+*/exp
+
 # data
 data/
+*/dataset
 
 # save
 save/

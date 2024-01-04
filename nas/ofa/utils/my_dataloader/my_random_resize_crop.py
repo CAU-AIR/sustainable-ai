@@ -16,6 +16,7 @@ _pil_interpolation_to_str = {
     Image.LANCZOS: "PIL.Image.LANCZOS",
     Image.HAMMING: "PIL.Image.HAMMING",
     Image.BOX: "PIL.Image.BOX",
+    transforms.InterpolationMode.BILINEAR: 'bilinear',
 }
 
 

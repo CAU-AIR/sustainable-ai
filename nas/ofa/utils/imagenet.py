@@ -17,7 +17,8 @@ __all__ = ["ImagenetDataProvider"]
 
 
 class ImagenetDataProvider(DataProvider):
-    DEFAULT_PATH = "/dataset/imagenet"
+    DEFAULT_PATH = os.getcwd()
+    DEFAULT_PATH += "/dataset/imagenet"
 
     def __init__(
         self,
@@ -25,7 +26,8 @@ class ImagenetDataProvider(DataProvider):
         train_batch_size=256,
         test_batch_size=512,
         valid_size=None,
-        n_worker=32,
+        # n_worker=32,
+        n_worker=0,
         resize_scale=0.08,
         distort_color=None,
         image_size=224,
@@ -42,7 +44,7 @@ class ImagenetDataProvider(DataProvider):
 
         self._valid_transform_dict = {}
         if not isinstance(self.image_size, int):
-            from ofa.utils.my_dataloader.my_data_loader import MyDataLoader
+            from .my_dataloader.my_data_loader import MyDataLoader
 
             assert isinstance(self.image_size, list)
             self.image_size.sort()  # e.g., 160 -> 224
@@ -93,14 +95,14 @@ class ImagenetDataProvider(DataProvider):
                 batch_size=train_batch_size,
                 sampler=train_sampler,
                 num_workers=n_worker,
-                pin_memory=True,
+                # pin_memory=True,
             )
             self.valid = torch.utils.data.DataLoader(
                 valid_dataset,
                 batch_size=test_batch_size,
                 sampler=valid_sampler,
                 num_workers=n_worker,
-                pin_memory=True,
+                # pin_memory=True,
             )
         else:
             if num_replicas is not None:
@@ -112,7 +114,7 @@ class ImagenetDataProvider(DataProvider):
                     batch_size=train_batch_size,
                     sampler=train_sampler,
                     num_workers=n_worker,
-                    pin_memory=True,
+                    # pin_memory=True,
                 )
             else:
                 self.train = train_loader_class(
@@ -120,7 +122,7 @@ class ImagenetDataProvider(DataProvider):
                     batch_size=train_batch_size,
                     shuffle=True,
                     num_workers=n_worker,
-                    pin_memory=True,
+                    # pin_memory=True,
                 )
             self.valid = None
 
@@ -134,7 +136,7 @@ class ImagenetDataProvider(DataProvider):
                 batch_size=test_batch_size,
                 sampler=test_sampler,
                 num_workers=n_worker,
-                pin_memory=True,
+                # pin_memory=True,
             )
         else:
             self.test = torch.utils.data.DataLoader(
@@ -142,7 +144,7 @@ class ImagenetDataProvider(DataProvider):
                 batch_size=test_batch_size,
                 shuffle=True,
                 num_workers=n_worker,
-                pin_memory=True,
+                # pin_memory=True,
             )
 
         if self.valid is None:
@@ -300,7 +302,7 @@ class ImagenetDataProvider(DataProvider):
                 batch_size=batch_size,
                 sampler=sub_sampler,
                 num_workers=num_worker,
-                pin_memory=True,
+                # pin_memory=True,
             )
             self.__dict__["sub_train_%d" % self.active_img_size] = []
             for images, labels in sub_data_loader:
