@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target
+from ofa.utils import AverageMeter, cross_entropy_loss_with_soft_target, arcface_loss
 from ofa.utils.common_tools import (
     DistributedMetric,
     list_mean,
@@ -190,6 +190,9 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 )
 
                 output = run_manager.net(images)
+                if args.arc:
+                    output = arcface_loss(output, labels, args.n_classes)
+
                 if args.kd_ratio == 0:
                     loss = run_manager.train_criterion(output, labels)
                     loss_type = "ce"
@@ -200,6 +203,7 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                         )
                     else:
                         kd_loss = F.mse_loss(output, soft_logits)
+
                     loss = args.kd_ratio * kd_loss + run_manager.train_criterion(
                         output, labels
                     )

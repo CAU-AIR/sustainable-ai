@@ -17,6 +17,7 @@ from ofa.utils import (
     cross_entropy_loss_with_soft_target,
     write_log,
     init_models,
+    arcface_loss,
 )
 from ofa.utils import (
     DistributedMetric,
@@ -388,6 +389,9 @@ class DistributedRunManager:
                 # compute output
                 output = self.net(images)
 
+                if args.arc:
+                    output = arcface_loss(output, labels, args.n_classes)
+
                 if args.teacher_model is None:
                     loss = self.train_criterion(output, labels)
                     loss_type = "ce"
@@ -398,6 +402,7 @@ class DistributedRunManager:
                         )
                     else:
                         kd_loss = F.mse_loss(output, soft_logits)
+
                     loss = args.kd_ratio * kd_loss + self.train_criterion(
                         output, labels
                     )

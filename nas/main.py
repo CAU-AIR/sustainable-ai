@@ -7,6 +7,7 @@ import numpy as np
 import horovod.torch as hvd
 
 import torch
+import torchvision.models as models
 
 from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
@@ -18,6 +19,7 @@ parser = argparse.ArgumentParser()
 # nas settings
 parser.add_argument("--task", type=str, default="depth", choices=["kernel", "depth", "expand",])
 parser.add_argument("--phase", type=int, default=1, choices=[1, 2]) # select phase 1 or 2 (depth and expand)
+parser.add_argument("--pocketnet", action="store_false")
 
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
@@ -80,20 +82,41 @@ else:
     raise NotImplementedError
 
 args.image_size = "128,160,192,224"
+args.resize_scale = 0.08
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
+args.model_init = "he_fout"
 
+args.opt_type = "sgd"
+args.lr_schedule_type = "cosine"
 args.momentum = 0.9
+args.weight_decay = 3e-5
+args.no_decay_keys = "bn#bias"
 args.no_nesterov = False
 
-args.kd_ratio = 0.
+args.valid_size = 10000
+args.distort_color = "tf"
+
+args.kd_ratio = 1.0
 args.width_mult_list = "1.0"
 args.dy_conv_scaling_mode = 1
+args.label_smoothing = 0.1
+args.kd_type = "ce"
 
+args.arc = False
 args.teacher_model = None
 args.fp16_allreduce = False
 
 args.validation_frequency = 1
+args.print_frequency = 10
+
+args.n_worker = 8
+args.independent_distributed_sampling = False
+
+args.bn_momentum = 0.1
+args.bn_eps = 1e-5
+args.dropout = 0.1
+args.base_stage_width = "proxyless"
 
 ##########################
 if __name__ == "__main__":
@@ -147,12 +170,6 @@ if __name__ == "__main__":
         **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
     )
 
-    # # print run config information
-    # if hvd.rank() == 0:
-    #     print("Run config:")
-    #     for k, v in run_config.config.items():
-    #         print("\t%s: %s" % (k, v))
-
     '''
     DynamicSeparableConv2d
     dy_conv_scaling_mode:
@@ -185,6 +202,12 @@ if __name__ == "__main__":
         expand_ratio_list = args.expand_list,
         width_mult_list = args.width_mult_list
     )
+
+    # teacher model
+    if args.kd_ratio > 0:
+        # args.teacher_model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+        args.teacher_model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V2)
+        args.teacher_model.cuda()
 
     """ Distributed RunManager """
     # Horovod: (optional) compression algorithm.

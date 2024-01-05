@@ -8,6 +8,8 @@ import time
 import torch
 import torch.nn as nn
 
+from ofa.utils import losses
+
 __all__ = [
     "mix_images",
     "mix_labels",
@@ -23,6 +25,7 @@ __all__ = [
     "get_net_info",
     "build_optimizer",
     "calc_learning_rate",
+    "arcface_loss",
 ]
 
 
@@ -62,6 +65,14 @@ def cross_entropy_loss_with_soft_target(pred, soft_target):
 def cross_entropy_with_label_smoothing(pred, target, label_smoothing=0.1):
     soft_target = label_smooth(target, pred.size(1), label_smoothing)
     return cross_entropy_loss_with_soft_target(pred, soft_target)
+
+def arcface_loss(feature, label, n_classes):
+    s = 64.0
+    m = 0.5
+    criterion = losses.ArcFace(in_features=feature.shape[1], out_features=n_classes, s=s, m=m).cuda()
+    output = criterion(feature, label)
+    
+    return output
 
 
 """ BN related """
