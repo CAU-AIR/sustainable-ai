@@ -54,7 +54,8 @@ class AccuracyDataset:
 
     # TODO: support parallel building
     def build_acc_dataset(
-        self, run_manager, ofa_network, n_arch=1000, image_size_list=None
+        # self, run_manager, ofa_network, n_arch=1000, image_size_list=None
+        self, run_manager, ofa_network, n_arch=200, image_size_list=None
     ):
         # load net_id_list, random sample if not exist
         if os.path.isfile(self.net_id_path):

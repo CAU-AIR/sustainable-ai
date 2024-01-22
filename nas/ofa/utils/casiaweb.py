@@ -18,7 +18,7 @@ __all__ = ["ImagenetDataProvider"]
 
 class ImagenetDataProvider(DataProvider):
     DEFAULT_PATH = os.getcwd()
-    DEFAULT_PATH += "/dataset/imagenet"
+    DEFAULT_PATH += "/dataset/casiaweb"
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class ImagenetDataProvider(DataProvider):
         n_worker=0,
         resize_scale=0.08,
         distort_color=None,
-        image_size=224,
+        image_size=112,
         num_replicas=None,
         rank=None,
     ):
@@ -160,7 +160,6 @@ class ImagenetDataProvider(DataProvider):
 
     @property
     def n_classes(self):
-        # return 1000
         return 200
 
     @property

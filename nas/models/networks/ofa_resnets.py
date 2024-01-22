@@ -17,7 +17,8 @@ __all__ = ["OFAResNets"]
 class OFAResNets(ResNets):
     def __init__(
         self,
-        n_classes=1000,
+        # n_classes=1000,
+        n_classes=200,
         bn_param=(0.1, 1e-5),
         dropout_rate=0,
         depth_list=2,

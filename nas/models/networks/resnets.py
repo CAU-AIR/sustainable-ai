@@ -109,7 +109,8 @@ class ResNets(MyNetwork):
 class ResNet50(ResNets):
     def __init__(
         self,
-        n_classes=1000,
+        # n_classes=1000,
+        n_classes=200,
         width_mult=1.0,
         bn_param=(0.1, 1e-5),
         dropout_rate=0,
@@ -174,7 +175,8 @@ class ResNet50(ResNets):
 class ResNet50D(ResNets):
     def __init__(
         self,
-        n_classes=1000,
+        # n_classes=1000,
+        n_classes=200,
         width_mult=1.0,
         bn_param=(0.1, 1e-5),
         dropout_rate=0,

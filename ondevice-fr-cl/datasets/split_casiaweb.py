@@ -64,7 +64,7 @@ class FaceDataset(ContinualDataset):
 class CASIAWebDataset(FaceDataset):
     _DATA_TYPE = "casiaweb"
     _DEFAULT_N_TASKS = 5
-    _N_CLASSES_PER_TASK = 1000
+    _N_CLASSES_PER_TASK = 200
 
 
 class CASIAWeb15Dataset(FaceDataset):

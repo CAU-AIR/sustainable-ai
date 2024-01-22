@@ -24,7 +24,8 @@ parser.add_argument("--pocketnet", action="store_false")
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--batch_size", type=int, default=64)
-parser.add_argument("--n_classes", type=int, default=1000)
+parser.add_argument("--dataset", type=str, default="imagenet", choices=["imagenet", "tinyimagenet", "casiaweb"])
+parser.add_argument("--n_classes", type=int, default=200)  # imagenet:1000 / tinyimagenet:200 / casiaweb: ?
 parser.add_argument("--resume", action="store_true")
 
 args = parser.parse_args()
@@ -81,7 +82,11 @@ elif args.task == "expand":
 else:
     raise NotImplementedError
 
-args.image_size = "128,160,192,224"
+if args.dataset == "imagenet":
+    args.image_size = "128,160,192,224"
+elif args.dataset == "casiaweb":
+    args.image_size = "64,80,96,112"
+
 args.resize_scale = 0.08
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
@@ -97,7 +102,8 @@ args.no_nesterov = False
 args.valid_size = 10000
 args.distort_color = "tf"
 
-args.kd_ratio = 1.0
+# args.kd_ratio = 1.0
+args.kd_ratio = 0
 args.width_mult_list = "1.0"
 args.dy_conv_scaling_mode = 1
 args.label_smoothing = 0.1
@@ -166,9 +172,14 @@ if __name__ == "__main__":
     args.train_batch_size = args.batch_size
     args.test_batch_size = args.batch_size * 2
 
-    run_config = DistributedImageNetRunConfig(
-        **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
-    )
+    if args.dataset == "imagenet":
+        run_config = DistributedImageNetRunConfig(
+            **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
+        )
+    elif args.dataset == "casiaweb":
+        run_config = DistributedCasiaWebRunConfig(
+            **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
+        )
 
     '''
     DynamicSeparableConv2d
