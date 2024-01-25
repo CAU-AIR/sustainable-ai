@@ -12,7 +12,7 @@ import torchvision.models as models
 from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
 from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
-from ofa.utils.run_config import DistributedImageNetRunConfig
+from ofa.utils.run_config import DistributedImageNetRunConfig, DistributedCasiaWebRunConfig
 from ofa.modules.distributed_run_manager import DistributedRunManager
 
 parser = argparse.ArgumentParser()
@@ -25,7 +25,7 @@ parser.add_argument("--pocketnet", action="store_false")
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--dataset", type=str, default="imagenet", choices=["imagenet", "tinyimagenet", "casiaweb"])
-parser.add_argument("--n_classes", type=int, default=200)  # imagenet:1000 / tinyimagenet:200 / casiaweb: ?
+parser.add_argument("--n_classes", type=int, default=1000)  # imagenet:1000 / tinyimagenet:200 / casiaweb: 10575
 parser.add_argument("--resume", action="store_true")
 
 args = parser.parse_args()

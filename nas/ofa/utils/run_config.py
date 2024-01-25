@@ -4,6 +4,7 @@
 
 from ofa.utils import calc_learning_rate, build_optimizer
 from ofa.utils.imagenet import ImagenetDataProvider
+from ofa.utils.casiaweb import CasiaDataProvider
 
 __all__ = [
            "RunConfig",
@@ -202,8 +203,6 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
         lr_schedule_type="cosine",
         lr_schedule_param=None,
         dataset="imagenet",
-        # train_batch_size=64,
-        # test_batch_size=64,
         train_batch_size=128,
         test_batch_size=128,
         valid_size=None,
@@ -294,7 +293,7 @@ class CasiaWebRunConfig(RunConfig):
         n_worker=32,
         resize_scale=0.08,
         distort_color="tf",
-        image_size=224,
+        image_size=112,
         **kwargs
     ):
         super(CasiaWebRunConfig, self).__init__(
@@ -325,8 +324,8 @@ class CasiaWebRunConfig(RunConfig):
     @property
     def data_provider(self):
         if self.__dict__.get("_data_provider", None) is None:
-            if self.dataset == ImagenetDataProvider.name():
-                DataProviderClass = ImagenetDataProvider
+            if self.dataset == CasiaDataProvider.name():
+                DataProviderClass = CasiaDataProvider
             else:
                 raise NotImplementedError
             self.__dict__["_data_provider"] = DataProviderClass(
@@ -364,7 +363,7 @@ class DistributedCasiaWebRunConfig(CasiaWebRunConfig):
         n_worker=8,
         resize_scale=0.08,
         distort_color="tf",
-        image_size=224,
+        image_size=112,
         **kwargs
     ):
         super(DistributedCasiaWebRunConfig, self).__init__(
@@ -394,3 +393,23 @@ class DistributedCasiaWebRunConfig(CasiaWebRunConfig):
 
         self._num_replicas = kwargs["num_replicas"]
         self._rank = kwargs["rank"]
+
+    @property
+    def data_provider(self):
+        if self.__dict__.get("_data_provider", None) is None:
+            if self.dataset == CasiaDataProvider.name():
+                DataProviderClass = CasiaDataProvider
+            else:
+                raise NotImplementedError
+            self.__dict__["_data_provider"] = DataProviderClass(
+                train_batch_size=self.train_batch_size,
+                test_batch_size=self.test_batch_size,
+                valid_size=self.valid_size,
+                n_worker=self.n_worker,
+                resize_scale=self.resize_scale,
+                distort_color=self.distort_color,
+                image_size=self.image_size,
+                num_replicas=self._num_replicas,
+                rank=self._rank,
+            )
+        return self.__dict__["_data_provider"]

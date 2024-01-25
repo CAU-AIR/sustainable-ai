@@ -13,12 +13,12 @@ import torchvision.datasets as datasets
 from ofa.utils.base_provider import DataProvider
 from ofa.utils.my_dataloader import MyRandomResizedCrop, MyDistributedSampler
 
-__all__ = ["ImagenetDataProvider"]
+__all__ = ["CasiaDataProvider"]
 
 
-class ImagenetDataProvider(DataProvider):
+class CasiaDataProvider(DataProvider):
     DEFAULT_PATH = os.getcwd()
-    DEFAULT_PATH += "/dataset/casiaweb"
+    DEFAULT_PATH += "/dataset/CASIAWebFace"
 
     def __init__(
         self,
@@ -152,7 +152,7 @@ class ImagenetDataProvider(DataProvider):
 
     @staticmethod
     def name():
-        return "imagenet"
+        return "casiaweb"
 
     @property
     def data_shape(self):
@@ -160,14 +160,14 @@ class ImagenetDataProvider(DataProvider):
 
     @property
     def n_classes(self):
-        return 200
+        return 10575
 
     @property
     def save_path(self):
         if self._save_path is None:
             self._save_path = self.DEFAULT_PATH
             if not os.path.exists(self._save_path):
-                self._save_path = os.path.expanduser("~/dataset/imagenet")
+                self._save_path = os.path.expanduser("~/dataset/CASIAWebFace")
         return self._save_path
 
     @property
