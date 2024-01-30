@@ -28,6 +28,7 @@ __all__ = [
 
 
 class DynamicSeparableConv2d(nn.Module):
+    # elastic kernel size
     KERNEL_TRANSFORM_MODE = 1  # None or 1
 
     def __init__(self, max_in_channels, kernel_size_list, stride=1, dilation=1):
@@ -47,6 +48,8 @@ class DynamicSeparableConv2d(nn.Module):
             bias=False,
         )
 
+        # Transformation matrix initialization
+        # initialize identity matrix
         self._ks_set = list(set(self.kernel_size_list))
         self._ks_set.sort()  # e.g., [3, 5, 7]
         if self.KERNEL_TRANSFORM_MODE is not None:
@@ -66,6 +69,7 @@ class DynamicSeparableConv2d(nn.Module):
 
         self.active_kernel_size = max(self.kernel_size_list)
 
+    # transform matrix
     def get_active_filter(self, in_channel, kernel_size):
         out_channel = in_channel
         max_kernel_size = max(self.kernel_size_list)

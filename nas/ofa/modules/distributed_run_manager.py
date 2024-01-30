@@ -27,6 +27,7 @@ from ofa.utils import (
     AverageMeter,
     mix_labels,
     mix_images,
+    face_accuracy,
 )
 from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
 
@@ -248,6 +249,22 @@ class DistributedRunManager:
         metric_dict["top1"].update(acc1[0], output.size(0))
         metric_dict["top5"].update(acc5[0], output.size(0))
 
+    def update_face_metric(self, metric_dict, output, labels):
+        FPRs=['1e-4', '5e-4', '1e-3', '5e-3', '5e-2']
+        dim = feats.shape[-1]
+
+        # pair-wise scores
+        feats = F.normalize(feats.reshape(-1, dim), dim=1)
+        feats = feats.reshape(-1, 2, dim)
+        feats0 = feats[:, 0, :]
+        feats1 = feats[:, 1, :]
+        scores = torch.sum(feats0 * feats1, dim=1).tolist()
+
+        results = face_accuracy(self.run_config.test_loader, scores, FPRs)
+        results = dict(results)
+        metric = ['ACC']
+        metric_dict["top1"].update(results[metric[0]], output.size(0))
+
     def get_metric_vals(self, metric_dict, return_dict=False):
         if return_dict:
             return {key: metric_dict[key].avg.item() for key in metric_dict}
@@ -287,14 +304,16 @@ class DistributedRunManager:
                 desc="Validate Epoch #{} {}".format(epoch + 1, run_str),
                 disable=no_logs or not self.is_root,
             ) as t:
-                for i, (images, labels) in enumerate(data_loader):
-                    images, labels = images.cuda(), labels.cuda()
+                for i, (query_x, retrieval_x, labels) in enumerate(data_loader):
+                    query_x, retrieval_x, labels = query_x.cuda(), retrieval_x.cuda(), labels.cuda()
                     # compute output
-                    output = net(images)
-                    loss = self.test_criterion(output, labels)
-                    # measure accuracy and record loss
-                    losses.update(loss, images.size(0))
-                    self.update_metric(metric_dict, output, labels)
+                    qeury_feat = net(query_x, return_feature=True)
+                    retrieval_feat = net(retrieval_x, return_feature=True)
+
+                    combined_feat = torch.cat([qeury_feat, retrieval_feat], dim=1)
+
+                    # measure accuracy
+                    self.update_face_metric(metric_dict, combined_feat, labels)
                     t.set_postfix(
                         {
                             "loss": losses.avg.item(),

@@ -33,7 +33,7 @@ __all__ = [
 def validate(
     run_manager,
     epoch=0,
-    is_test=False,
+    is_test=True,
     image_size_list=None,
     ks_list=None,
     expand_ratio_list=None,
@@ -171,7 +171,7 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 # set random seed before sampling
                 subnet_seed = int("%d%.3d%.3d" % (epoch * nBatch + i, _, 0))
                 random.seed(subnet_seed)
-                subnet_settings = dynamic_net.sample_active_subnet()
+                subnet_settings = dynamic_net.sample_active_subnet()    # get subnet
                 subnet_str += (
                     "%d: " % _
                     + ",".join(
@@ -190,8 +190,6 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 )
 
                 output = run_manager.net(images)
-                if args.arc:
-                    output = arcface_loss(output, labels, args.n_classes)
 
                 if args.kd_ratio == 0:
                     loss = run_manager.train_criterion(output, labels)
@@ -235,22 +233,27 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
     return losses.avg.item(), run_manager.get_metric_vals(metric_dict)
 
 
-def train(run_manager, args, validate_func=None):
+def train(run_manager, args, validate_func=None, logs=None):
     distributed = isinstance(run_manager, DistributedRunManager)
     if validate_func is None:
         validate_func = validate
 
     for epoch in range(
-        run_manager.start_epoch, run_manager.run_config.n_epochs + args.warmup_epochs
+        run_manager.start_epoch, run_manager.run_config.n_epochs + args.warmup_epochs # 0 -> 25
     ):
         train_loss, (train_top1, train_top5) = train_one_epoch(
             run_manager, args, epoch, args.warmup_epochs, args.warmup_lr
         )
+        logs.log({'Training Loss': train_loss})
+        logs.log({'Training Accuracy': train_top1})
 
-        if (epoch + 1) % args.validation_frequency == 0:
+        if (epoch + 1) % args.test_frequency == 0:
             val_loss, val_acc, val_acc5, _val_log = validate_func(
-                run_manager, epoch=epoch, is_test=False
+                run_manager, epoch=epoch, is_test=True
             )
+            logs.log({'Test Loss': val_loss})
+            logs.log({'Test Accuracy': val_acc})
+
             # best_acc
             is_best = val_acc > run_manager.best_acc
             run_manager.best_acc = max(run_manager.best_acc, val_acc)
@@ -280,6 +283,8 @@ def train(run_manager, args, validate_func=None):
                     is_best=is_best,
                 )
 
+    logs.log({'Best Test Accuracy': run_manager.best_acc})
+
 
 def load_models(run_manager, dynamic_net, model_path=None):
     # specify init path
@@ -288,8 +293,8 @@ def load_models(run_manager, dynamic_net, model_path=None):
     run_manager.write_log("Loaded init from %s" % model_path, "valid")
 
 
-def train_elastic_depth(train_func, run_manager, args, validate_func_dict):
-    dynamic_net = run_manager.net
+def train_elastic_depth(train_func, run_manager, args, validate_func_dict, logs):
+    dynamic_net = run_manager.net   # OFAResNets
     if isinstance(dynamic_net, nn.DataParallel):
         dynamic_net = dynamic_net.module
 
@@ -297,20 +302,6 @@ def train_elastic_depth(train_func, run_manager, args, validate_func_dict):
     depth_stage_list.sort(reverse=True)
     n_stages = len(depth_stage_list) - 1
     current_stage = n_stages - 1
-
-    # # load pretrained models
-    # if run_manager.start_epoch == 0 and not args.resume:
-    #     validate_func_dict["depth_list"] = sorted(dynamic_net.depth_list)
-
-    #     load_models(run_manager, dynamic_net, model_path=args.ofa_checkpoint_path)
-    #     # validate after loading weights
-    #     run_manager.write_log(
-    #         "%.3f\t%.3f\t%.3f\t%s"
-    #         % validate(run_manager, is_test=True, **validate_func_dict),
-    #         "valid",
-    #     )
-    # else:
-    #     assert args.resume
 
     run_manager.write_log(
         "-" * 30
@@ -337,6 +328,7 @@ def train_elastic_depth(train_func, run_manager, args, validate_func_dict):
         lambda _run_manager, epoch, is_test: validate(
             _run_manager, epoch, is_test, **validate_func_dict
         ),
+        logs
     )
 
 

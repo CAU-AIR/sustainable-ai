@@ -124,7 +124,7 @@ class OFAResNets(ResNets):
     def name():
         return "OFAResNets"
 
-    def forward(self, x):
+    def forward(self, x, return_feature=False):
         for layer in self.input_stem:
             if (
                 self.input_stem_skipping > 0
@@ -135,11 +135,16 @@ class OFAResNets(ResNets):
             else:
                 x = layer(x)
         x = self.max_pooling(x)
+
         for stage_id, block_idx in enumerate(self.grouped_block_index):
             depth_param = self.runtime_depth[stage_id]
             active_idx = block_idx[: len(block_idx) - depth_param]
             for idx in active_idx:
                 x = self.blocks[idx](x)
+
+        if return_feature:
+            return x
+
         x = self.global_avg_pool(x)
         x = self.classifier(x)
         return x
@@ -217,13 +222,9 @@ class OFAResNets(ResNets):
                 block.active_expand_ratio = e
 
         if width_mult[0] is not None:
-            self.input_stem[1].conv.active_out_channel = self.input_stem[
-                0
-            ].active_out_channel = self.input_stem[0].out_channel_list[width_mult[0]]
+            self.input_stem[1].conv.active_out_channel = self.input_stem[0].active_out_channel = self.input_stem[0].out_channel_list[width_mult[0]]
         if width_mult[1] is not None:
-            self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[
-                width_mult[1]
-            ]
+            self.input_stem[2].active_out_channel = self.input_stem[2].out_channel_list[width_mult[1]]
 
         if depth[0] is not None:
             self.input_stem_skipping = depth[0] != max(self.depth_list)
@@ -234,9 +235,7 @@ class OFAResNets(ResNets):
                 self.runtime_depth[stage_id] = max(self.depth_list) - d
             if w is not None:
                 for idx in block_idx:
-                    self.blocks[idx].active_out_channel = self.blocks[
-                        idx
-                    ].out_channel_list[w]
+                    self.blocks[idx].active_out_channel = self.blocks[idx].out_channel_list[w]
 
     def sample_active_subnet(self):
         # sample expand ratio

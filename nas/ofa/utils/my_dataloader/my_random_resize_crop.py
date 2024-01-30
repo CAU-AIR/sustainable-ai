@@ -23,7 +23,7 @@ _pil_interpolation_to_str = {
 class MyRandomResizedCrop(transforms.RandomResizedCrop):
     ACTIVE_SIZE = 224
     IMAGE_SIZE_LIST = [224]
-    IMAGE_SIZE_SEG = 4
+    IMAGE_SIZE_SEG = 4  # increasing by IMAGE_SIZE_SEG
 
     CONTINUOUS = False
     SYNC_DISTRIBUTED = True

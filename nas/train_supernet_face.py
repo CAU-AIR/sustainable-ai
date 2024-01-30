@@ -5,15 +5,16 @@ import numpy as np
 
 # multi gpu
 import horovod.torch as hvd
+#Log
+import wandb
 
 import torch
-import torchvision.models as models
 
 from models.networks.ofa_resnets import OFAResNets
 from models.modules.dynamic_op import DynamicSeparableConv2d
-from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
-from ofa.utils.run_config import DistributedImageNetRunConfig, DistributedCasiaWebRunConfig
+from ofa.utils.run_config import DistributedFaceRunConfig
 from ofa.modules.distributed_run_manager import DistributedRunManager
+from ofa.utils.my_dataloader.my_random_resize_crop import MyRandomResizedCrop
 
 parser = argparse.ArgumentParser()
 # nas settings
@@ -23,9 +24,9 @@ parser.add_argument("--pocketnet", action="store_false")
 
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--batch_size", type=int, default=128)
-parser.add_argument("--dataset", type=str, default="imagenet", choices=["imagenet", "tinyimagenet", "casiaweb"])
-parser.add_argument("--n_classes", type=int, default=1000)  # imagenet:1000 / tinyimagenet:200 / casiaweb: 10575
+parser.add_argument("--batch_size", type=int, default=256)
+parser.add_argument("--dataset", type=str, default="face")  # train: CASIAWebFace / test : LFW
+parser.add_argument("--n_classes", type=int, default=10575)  # face train = casiaweb: 10575
 parser.add_argument("--resume", action="store_true")
 
 args = parser.parse_args()
@@ -48,7 +49,8 @@ elif args.task == "depth":
         args.base_lr = 2.5e-3
         args.warmup_epochs = 0
         args.warmup_lr = -1
-        args.ks_list = "3,5,7"
+        # args.ks_list = "3,5,7"
+        args.ks_list = "3" # OFAResNet
         # args.expand_list = "6"
         args.expand_list = "1"
         args.depth_list = "3,4"
@@ -82,49 +84,23 @@ elif args.task == "expand":
 else:
     raise NotImplementedError
 
-if args.dataset == "imagenet":
-    args.image_size = "128,160,192,224"
-elif args.dataset == "casiaweb":
-    args.image_size = "64,80,96,112"
-
-args.resize_scale = 0.08
+args.image_size = "64,80,96,112"
 args.continuous_size = True
 args.not_sync_distributed_image_size = False
-args.model_init = "he_fout"
 
-args.opt_type = "sgd"
-args.lr_schedule_type = "cosine"
 args.momentum = 0.9
-args.weight_decay = 3e-5
-args.no_decay_keys = "bn#bias"
 args.no_nesterov = False
 
-args.valid_size = 10000
-args.distort_color = "tf"
+args.dy_conv_scaling_mode = 1
+args.width_mult_list = "1.0"
 
 # args.kd_ratio = 1.0
 args.kd_ratio = 0
-args.width_mult_list = "1.0"
-args.dy_conv_scaling_mode = 1
-args.label_smoothing = 0.1
+args.teacher_path = ''
 args.kd_type = "ce"
 
-args.arc = False
-args.teacher_model = None
-args.fp16_allreduce = False
+args.test_frequency = 1
 
-args.validation_frequency = 1
-args.print_frequency = 10
-
-args.n_worker = 8
-args.independent_distributed_sampling = False
-
-args.bn_momentum = 0.1
-args.bn_eps = 1e-5
-args.dropout = 0.1
-args.base_stage_width = "proxyless"
-
-##########################
 if __name__ == "__main__":
     os.makedirs(args.path, exist_ok=True)
 
@@ -156,30 +132,25 @@ if __name__ == "__main__":
             Each process uses an independent seed (based on the process ID and the current time) to sample image sizes.
             This means that each process can independently select images of different sizes.
     '''
-    MyRandomResizedCrop.CONTINUOUS = args.continuous_size
-    MyRandomResizedCrop.SYNC_DISTRIBUTED = not args.not_sync_distributed_image_size
+    MyRandomResizedCrop.CONTINUOUS = args.continuous_size   # True
+    MyRandomResizedCrop.SYNC_DISTRIBUTED = not args.not_sync_distributed_image_size # True
 
     # build run config from args
     args.lr_schedule_param = None
     args.opt_param = {
-        "momentum": args.momentum,
-        "nesterov": not args.no_nesterov,
+        "momentum": args.momentum,  # 0.9
+        "nesterov": not args.no_nesterov,   # not False -> True
     }
-    args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate
-    if args.warmup_lr < 0:
+    args.init_lr = args.base_lr * num_gpus  # linearly rescale the learning rate / 0.0025 * 1
+    if args.warmup_lr < 0:  # 0.0025
         args.warmup_lr = args.base_lr
 
     args.train_batch_size = args.batch_size
     args.test_batch_size = args.batch_size
 
-    if args.dataset == "imagenet":
-        run_config = DistributedImageNetRunConfig(
-            **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
-        )
-    elif args.dataset == "casiaweb":
-        run_config = DistributedCasiaWebRunConfig(
-            **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
-        )
+    run_config = DistributedFaceRunConfig(
+        **args.__dict__, num_replicas=num_gpus, rank=hvd.rank()
+    )
 
     '''
     DynamicSeparableConv2d
@@ -214,26 +185,50 @@ if __name__ == "__main__":
         width_mult_list = args.width_mult_list
     )
 
-    # teacher model
     if args.kd_ratio > 0:
-        # args.teacher_model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-        args.teacher_model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V2)
+        import torchvision.models as models
+        args.teacher_model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V2) # 수정필요
         args.teacher_model.cuda()
+        # init = torch.load(args.teacher_path, map_location="cpu")["state_dict"]
+        # args.teacher_model.load_state_dict(init)
 
-    """ Distributed RunManager """
-    # Horovod: (optional) compression algorithm.
-    compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none # applies a compression method using 16-bit floating-point format
+    compression = hvd.Compression.none
+
     distributed_run_manager = DistributedRunManager(
-        args.path,
-        net,
-        run_config,
-        compression,
-        backward_steps=args.dynamic_batch_size,
+        args.path,      # save path : exp/kernel2kernel_depth/phase1
+        net,            # OFAResNets
+        run_config,     # DistributedCasiaWebRunConfig(CasiaWebRunConfig(RunConfig)) : data_provider, learning_rate, train_loader, valid_loader, test_loader, random_sub_train_loader?, build_optimizer
+        compression,    # None
+        backward_steps=args.dynamic_batch_size, # 2
         is_root=(hvd.rank() == 0),
     )
     distributed_run_manager.save_config()
-    # hvd broadcast
-    distributed_run_manager.broadcast()
+    distributed_run_manager.broadcast() # hvd broadcast
+
+    # logging
+    logs = wandb
+    login_key = '1623b52d57b487ee9678660beb03f2f698fcbeb0'
+    logs.login(key=login_key)
+
+    log_name = 'SuperNet'
+    if args.kd_ratio > 0:
+        log_name += 'Dist'
+    logs.init(config=args, project='OFA-Face', name=log_name)
+
+    # model size
+    model_size = sum(p.numel() for p in net.parameters() if p.requires_grad)
+    model_size_in_million = model_size / 1e6
+    print("Model Size: {:.2f} M".format(model_size_in_million))
+    logs.log({'Model Size': model_size})
+
+    # flops
+    from fvcore.nn import FlopCountAnalysis
+    inputs = torch.randn(1, 3, 112, 112).cuda()
+    flops = FlopCountAnalysis(net, inputs)
+    flops_in_gflops = flops / 1e9
+    print("FLOPs: {:.2f} GFLOPs".format(flops_in_gflops))
+    logs.log({'FLOPs': flops.total()})
+
 
     # training
     from ofa.modules.progressive_shrinking import (
@@ -242,16 +237,16 @@ if __name__ == "__main__":
     )
 
     validate_func_dict = {
-        "image_size_list": {224}
+        "image_size_list": {112}
         if isinstance(args.image_size, int)
-        else sorted({160, 224}),
+        else sorted({64, 112}),
         "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
         "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
         "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
     }
+
     if args.task == "kernel":
         validate_func_dict["ks_list"] = sorted(args.ks_list)
-
         train(
             distributed_run_manager,
             args,
@@ -259,17 +254,17 @@ if __name__ == "__main__":
                 _run_manager, epoch, is_test, **validate_func_dict
             ),
         )
+
     elif args.task == "depth":
         from ofa.modules.progressive_shrinking import (
             train_elastic_depth,
         )
+        train_elastic_depth(train, distributed_run_manager, args, validate_func_dict, logs)
 
-        train_elastic_depth(train, distributed_run_manager, args, validate_func_dict)
     elif args.task == "expand":
         from ofa.modules.progressive_shrinking import (
             train_elastic_expand,
         )
-
         train_elastic_expand(train, distributed_run_manager, args, validate_func_dict)
     else:
         raise NotImplementedError

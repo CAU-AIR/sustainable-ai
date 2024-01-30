@@ -4,12 +4,12 @@
 
 from ofa.utils import calc_learning_rate, build_optimizer
 from ofa.utils.imagenet import ImagenetDataProvider
-from ofa.utils.casiaweb import CasiaDataProvider
+from ofa.utils.face_data import FaaceDataProvider
 
 __all__ = [
            "RunConfig",
            "ImagenetRunConfig", "DistributedImageNetRunConfig",
-           "CasiaWebRunConfig", "DistributedCasiaWebRunConfig",
+           "FaceRunConfig", "DistributedFaceRunConfig",
           ]
 
 
@@ -133,8 +133,8 @@ class ImagenetRunConfig(RunConfig):
         lr_schedule_type="cosine",
         lr_schedule_param=None,
         dataset="imagenet",
-        train_batch_size=256,
-        test_batch_size=500,
+        train_batch_size=64,
+        test_batch_size=64,
         valid_size=None,
         opt_type="sgd",
         opt_param=None,
@@ -203,8 +203,8 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
         lr_schedule_type="cosine",
         lr_schedule_param=None,
         dataset="imagenet",
-        train_batch_size=128,
-        test_batch_size=128,
+        train_batch_size=64,
+        test_batch_size=64,
         valid_size=None,
         opt_type="sgd",
         opt_param=None,
@@ -270,16 +270,16 @@ class DistributedImageNetRunConfig(ImagenetRunConfig):
         return self.__dict__["_data_provider"]
 
 # CasiaWeb Dataset
-class CasiaWebRunConfig(RunConfig):
+class FaceRunConfig(RunConfig):
     def __init__(
         self,
         n_epochs=150,
         init_lr=0.05,
         lr_schedule_type="cosine",
         lr_schedule_param=None,
-        dataset="casiaweb",
-        train_batch_size=256,
-        test_batch_size=500,
+        dataset="face",
+        train_batch_size=64,
+        test_batch_size=64,
         valid_size=None,
         opt_type="sgd",
         opt_param=None,
@@ -296,7 +296,7 @@ class CasiaWebRunConfig(RunConfig):
         image_size=112,
         **kwargs
     ):
-        super(CasiaWebRunConfig, self).__init__(
+        super(FaceRunConfig, self).__init__(
             n_epochs,
             init_lr,
             lr_schedule_type,
@@ -324,8 +324,8 @@ class CasiaWebRunConfig(RunConfig):
     @property
     def data_provider(self):
         if self.__dict__.get("_data_provider", None) is None:
-            if self.dataset == CasiaDataProvider.name():
-                DataProviderClass = CasiaDataProvider
+            if self.dataset == FaaceDataProvider.name():
+                DataProviderClass = FaaceDataProvider
             else:
                 raise NotImplementedError
             self.__dict__["_data_provider"] = DataProviderClass(
@@ -340,7 +340,7 @@ class CasiaWebRunConfig(RunConfig):
         return self.__dict__["_data_provider"]
 
 
-class DistributedCasiaWebRunConfig(CasiaWebRunConfig):
+class DistributedFaceRunConfig(FaceRunConfig):
     def __init__(
         self,
         n_epochs=150,
@@ -366,7 +366,7 @@ class DistributedCasiaWebRunConfig(CasiaWebRunConfig):
         image_size=112,
         **kwargs
     ):
-        super(DistributedCasiaWebRunConfig, self).__init__(
+        super(DistributedFaceRunConfig, self).__init__(
             n_epochs,
             init_lr,
             lr_schedule_type,
@@ -397,8 +397,8 @@ class DistributedCasiaWebRunConfig(CasiaWebRunConfig):
     @property
     def data_provider(self):
         if self.__dict__.get("_data_provider", None) is None:
-            if self.dataset == CasiaDataProvider.name():
-                DataProviderClass = CasiaDataProvider
+            if self.dataset == FaaceDataProvider.name():
+                DataProviderClass = FaaceDataProvider
             else:
                 raise NotImplementedError
             self.__dict__["_data_provider"] = DataProviderClass(

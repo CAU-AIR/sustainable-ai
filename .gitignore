@@ -9,10 +9,13 @@ __pycache__/
 # config files
 *.config
 */exp
+*/wandb
 
 # data
 data/
 */dataset
+
+# logs
 
 # save
 save/

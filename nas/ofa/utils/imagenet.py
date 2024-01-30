@@ -23,8 +23,8 @@ class ImagenetDataProvider(DataProvider):
     def __init__(
         self,
         save_path=None,
-        train_batch_size=256,
-        test_batch_size=512,
+        train_batch_size=64,
+        test_batch_size=64,
         valid_size=None,
         # n_worker=32,
         n_worker=0,
