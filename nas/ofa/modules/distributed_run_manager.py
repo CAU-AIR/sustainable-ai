@@ -249,7 +249,7 @@ class DistributedRunManager:
         metric_dict["top1"].update(acc1[0], output.size(0))
         metric_dict["top5"].update(acc5[0], output.size(0))
 
-    def update_face_metric(self, metric_dict, output, labels):
+    def update_face_metric(self, metric_dict, feats):
         FPRs=['1e-4', '5e-4', '1e-3', '5e-3', '5e-2']
         dim = feats.shape[-1]
 
@@ -260,10 +260,13 @@ class DistributedRunManager:
         feats1 = feats[:, 1, :]
         scores = torch.sum(feats0 * feats1, dim=1).tolist()
 
-        results = face_accuracy(self.run_config.test_loader, scores, FPRs)
+        retrieval_targets = self.run_config.data_provider.test.dataset.retrieval_targets        
+
+        results = face_accuracy(retrieval_targets, scores, FPRs)
         results = dict(results)
         metric = ['ACC']
-        metric_dict["top1"].update(results[metric[0]], output.size(0))
+        # metric_dict["top1"].update(results[metric[0]], scores.szie(0))
+        metric_dict["top1"].update(results[metric[0]], len(scores))
 
     def get_metric_vals(self, metric_dict, return_dict=False):
         if return_dict:
@@ -298,27 +301,37 @@ class DistributedRunManager:
         losses = DistributedMetric("val_loss")
         metric_dict = self.get_metric_dict()
 
+        mb_size = self.run_config.test_batch_size
+        n_samples = len(self.run_config.data_provider.test.dataset)
+        output_dim = max(net.input_channel) * 32
+        feats = torch.zeros([n_samples, 2, output_dim], dtype=torch.float32).cuda()
+
         with torch.no_grad():
             with tqdm(
                 total=len(data_loader),
                 desc="Validate Epoch #{} {}".format(epoch + 1, run_str),
                 disable=no_logs or not self.is_root,
             ) as t:
-                for i, (query_x, retrieval_x, labels) in enumerate(data_loader):
+                for idx, (query_x, retrieval_x, labels) in enumerate(data_loader):
                     query_x, retrieval_x, labels = query_x.cuda(), retrieval_x.cuda(), labels.cuda()
                     # compute output
                     qeury_feat = net(query_x, return_feature=True)
                     retrieval_feat = net(retrieval_x, return_feature=True)
+                    
+                    batch_start_idx = idx * mb_size
+                    actual_batch_size = qeury_feat.size(0)
+                    batch_end_idx = batch_start_idx + actual_batch_size
 
-                    combined_feat = torch.cat([qeury_feat, retrieval_feat], dim=1)
+                    feats[batch_start_idx:batch_end_idx, 0, :] = qeury_feat
+                    feats[batch_start_idx:batch_end_idx, 1, :] = retrieval_feat
 
                     # measure accuracy
-                    self.update_face_metric(metric_dict, combined_feat, labels)
+                    self.update_face_metric(metric_dict, feats.cpu())
                     t.set_postfix(
                         {
                             "loss": losses.avg.item(),
                             **self.get_metric_vals(metric_dict, return_dict=True),
-                            "img_size": images.size(2),
+                            "img_size": query_x.size(2),
                         }
                     )
                     t.update(1)

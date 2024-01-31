@@ -1,5 +1,7 @@
 import random
 
+import torch
+
 from models.modules.dynamic_layers import (
     DynamicConvLayer,
     DynamicLinearLayer,
@@ -38,6 +40,8 @@ class OFAResNets(ResNets):
             make_divisible(64 * width_mult, MyNetwork.CHANNEL_DIVISIBLE)
             for width_mult in self.width_mult_list
         ]
+        self.input_channel = input_channel
+        
         mid_input_channel = [
             make_divisible(channel // 2, MyNetwork.CHANNEL_DIVISIBLE)
             for channel in input_channel
@@ -141,11 +145,11 @@ class OFAResNets(ResNets):
             active_idx = block_idx[: len(block_idx) - depth_param]
             for idx in active_idx:
                 x = self.blocks[idx](x)
+        x = self.global_avg_pool(x)
 
         if return_feature:
             return x
 
-        x = self.global_avg_pool(x)
         x = self.classifier(x)
         return x
 

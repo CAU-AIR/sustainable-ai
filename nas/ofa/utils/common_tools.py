@@ -187,6 +187,8 @@ def face_accuracy(labels, scores, FPRs):
     from scipy.interpolate import interp1d
 
     # eer and auc
+    # len(labels) = 6000
+    # scores shape = 1048576 -> must be 6,000
     fpr, tpr, _ = metrics.roc_curve(labels, scores, pos_label=1)
     roc_curve = interp1d(fpr, tpr)
     EER = 100. * brentq(lambda x : 1. - x - roc_curve(x), 0., 1.)
@@ -299,6 +301,9 @@ class DistributedMetric(object):
 
     def update(self, val, delta_n=1):
         import horovod.torch as hvd
+
+        if not isinstance(val, torch.Tensor):
+            val = torch.tensor(val)
 
         val *= delta_n
         self.sum += hvd.allreduce(val.detach().cpu(), name=self.name)

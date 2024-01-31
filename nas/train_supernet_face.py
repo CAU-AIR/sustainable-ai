@@ -42,7 +42,7 @@ if args.task == "kernel":
     args.expand_list = "6"
     args.depth_list = "4"
 elif args.task == "depth":
-    args.path = "exp/kernel2kernel_depth/phase%d" % args.phase
+    args.path = "exp/depth/%s" % args.dataset
     args.dynamic_batch_size = 2
     if args.phase == 1:
         args.n_epochs = 25
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     from fvcore.nn import FlopCountAnalysis
     inputs = torch.randn(1, 3, 112, 112).cuda()
     flops = FlopCountAnalysis(net, inputs)
-    flops_in_gflops = flops / 1e9
+    flops_in_gflops = flops.total() / 1e9
     print("FLOPs: {:.2f} GFLOPs".format(flops_in_gflops))
     logs.log({'FLOPs': flops.total()})
 
