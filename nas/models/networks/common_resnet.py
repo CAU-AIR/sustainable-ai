@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.functional import relu, avg_pool2d
 
+import numpy as np
 
 __all__ = [
     "ResNet",
@@ -85,6 +86,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, nf * 2, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, nf * 4, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, nf * 8, num_blocks[3], stride=2)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.last = nn.Linear(self.feature_size, self.num_classes)
 
@@ -102,8 +104,8 @@ class ResNet(nn.Module):
         feats = self.layer2(feats)
         feats = self.layer3(feats)
         feats = self.layer4(feats)
-        feats = avg_pool2d(feats, 4)
-        feats = feats.view(feats.size(0), -1)
+        feats = self.avgpool(feats)
+        feats = torch.flatten(feats, 1)
         
         if outputs == 'features':
             return feats

@@ -32,6 +32,11 @@ def train(epoch, net, trainloader, optimizer, device):
 
         outputs = net(inputs)
 
+        print('*'*8)
+        print(min(labels))
+        print(max(labels))
+        print(outputs)
+        print('*'*8)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
@@ -85,7 +90,7 @@ def face_accuracy(labels, scores, FPRs):
 
     return [('ACC', ACC), ('EER', EER), ('AUC', AUC)] + TPRs
 
-def update_face_metric(self, metric_dict, feats):
+def update_face_metric(metric_dict, feats, dataset):
     FPRs=['1e-4', '5e-4', '1e-3', '5e-3', '5e-2']
     dim = feats.shape[-1]
 
@@ -96,7 +101,7 @@ def update_face_metric(self, metric_dict, feats):
     feats1 = feats[:, 1, :]
     scores = torch.sum(feats0 * feats1, dim=1).tolist()
 
-    retrieval_targets = self.run_config.data_provider.test.dataset.retrieval_targets        
+    retrieval_targets = dataset.retrieval_targets
 
     results = face_accuracy(retrieval_targets, scores, FPRs)
     results = dict(results)
@@ -110,20 +115,21 @@ def get_metric_dict():
         "top5": DistributedMetric("top5"),
     }
 
-def get_metric_vals(self, metric_dict, return_dict=False):
+def get_metric_vals(metric_dict, return_dict=False):
     if return_dict:
         return {key: metric_dict[key].avg.item() for key in metric_dict}
     else:
         return [metric_dict[key].avg.item() for key in metric_dict]
 
-def test(args, net, testloader, device):
+def test(args, net, testloader, device, test_dataset):
     net.eval()
     test_latency = 0
     total_samples = 0
     
     mb_size = args.batch
     n_samples = args.test_size
-    output_dim = max(net.input_channel) * 32
+    # output_dim = max(net.input_channel) * 32
+    output_dim = net.module.feature_size # 2048
     feats = torch.zeros([n_samples, 2, output_dim], dtype=torch.float32).to(device)
     metric_dict = get_metric_dict()
 
@@ -135,8 +141,8 @@ def test(args, net, testloader, device):
             query_x, retrieval_x, labels = query_x.to(device), retrieval_x.to(device), labels.to(device)
             
             # compute output
-            qeury_feat = net(query_x, return_feature=True)
-            retrieval_feat = net(retrieval_x, return_feature=True)
+            qeury_feat = net(query_x, outputs='features')
+            retrieval_feat = net(retrieval_x, outputs='features')
 
             batch_start_idx = idx * mb_size
             actual_batch_size = qeury_feat.size(0)
@@ -146,7 +152,7 @@ def test(args, net, testloader, device):
             feats[batch_start_idx:batch_end_idx, 1, :] = retrieval_feat
 
             # measure accuracy
-            update_face_metric(metric_dict, feats.cpu())
+            update_face_metric(metric_dict, feats.cpu(), test_dataset)
 
             test_latency += time.time() - start_time
             total_samples += len(data[0])
@@ -162,7 +168,7 @@ def calculate_model_size(model):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch", type=int, default=256)
+    parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--model", type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50'])
     args = parser.parse_args()
 
@@ -172,11 +178,13 @@ if __name__ == "__main__":
     random.seed(args.seed)
 
     # To solve RuntimeError: cuDNN error: CUDNN_STATUS_INTERNAL_ERROR
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     
+    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
     os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2"
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda:1")
 
@@ -194,7 +202,7 @@ if __name__ == "__main__":
                                    transform=transform, 
                                    data_annot=test_path)
     args.test_size = (len(test_dataset))
-
+    
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
@@ -223,20 +231,19 @@ if __name__ == "__main__":
     wandb.init(config=args, project='ResNet for OFA Dist', name=model_name)
 
     for epoch in range(num_epochs):
-        print('epoch : ', epoch)
         train_loss, train_accuracy = train(epoch, teacher_model, train_loader, optimizer, device)
         # val_accuracy = validate(teacher_model, valid_loader, device)
-        test_accuracy, _, avg_latency = test(args, teacher_model, test_loader, device)
+        test_accuracy, avg_latency = test(args, teacher_model, test_loader, device, test_dataset)
 
         total_latency += avg_latency
 
         logs.log({"Train Loss": train_loss})
         logs.log({"Train Acc": train_accuracy})
-        logs.log({"Test Acc": test_accuracy})
+        logs.log({"Test Acc": test_accuracy[0]})
 
 
-        if test_accuracy > best_accuracy:
-            best_accuracy = test_accuracy
+        if test_accuracy[0] > best_accuracy:
+            best_accuracy = test_accuracy[0]
             torch.save(teacher_model.state_dict(), 'best_model.pth.tar')
 
     epoch_latency = total_latency / num_epochs
