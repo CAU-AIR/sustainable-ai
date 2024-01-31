@@ -250,7 +250,3 @@ class ResNet50D(ResNets):
 
         # set bn param
         self.set_bn_param(*bn_param)
-
-
-def resnet18(num_classes: int, nf: Optional[int] = 64, **kwargs):
-    return ResNets(num_classes=num_classes, block=BasicBlock, num_blocks=[2, 2, 2, 2], nf=nf, **kwargs)

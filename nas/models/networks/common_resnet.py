@@ -73,7 +73,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, num_classes, block, num_blocks, nf):
+    def __init__(self, num_classes, block, num_blocks, nf, zero_init_residual=False):
         super(ResNet, self).__init__()
         self.in_planes = nf
 
@@ -87,8 +87,21 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, nf * 4, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, nf * 8, num_blocks[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
         self.last = nn.Linear(self.feature_size, self.num_classes)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+        if zero_init_residual:
+            for m in self.modules():
+                if isinstance(m, Bottleneck):
+                    nn.init.constant_(m.bn3.weight, 0)
+                elif isinstance(m, BasicBlock):
+                    nn.init.constant_(m.bn2.weight, 0)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -118,24 +131,24 @@ class ResNet(nn.Module):
 
 
 # @register_model("resnet18")
-def resnet18(num_classes: int, nf: Optional[int] = 64):
+def resnet18(num_classes: int, nf: Optional[int] = 64, **kwargs):
     model_name = 'ResNet18'
-    return ResNet(num_classes=num_classes, block=BasicBlock, num_blocks=[2, 2, 2, 2], nf=nf), model_name
+    return ResNet(num_classes=num_classes, block=BasicBlock, num_blocks=[2, 2, 2, 2], nf=nf, **kwargs), model_name
 
 
 # @register_model("resnet34")
-def resnet34(num_classes: int, nf: Optional[int] = 64):
+def resnet34(num_classes: int, nf: Optional[int] = 64, **kwargs):
     model_name = 'ResNet34'
-    return ResNet(num_classes=num_classes, block=BasicBlock, num_blocks=[3, 4, 6, 3], nf=nf), model_name
+    return ResNet(num_classes=num_classes, block=BasicBlock, num_blocks=[3, 4, 6, 3], nf=nf, **kwargs), model_name
 
 
 # @register_model("resnet50")
-def resnet50(num_classes: int, nf: Optional[int] = 64):
+def resnet50(num_classes: int, nf: Optional[int] = 64, **kwargs):
     model_name = 'ResNet50'
-    return ResNet(num_classes=num_classes, block=Bottleneck, num_blocks=[3, 4, 6, 3], nf=nf), model_name
+    return ResNet(num_classes=num_classes, block=Bottleneck, num_blocks=[3, 4, 6, 3], nf=nf, **kwargs), model_name
 
 
 # @register_model("resnet101")
-def resnet101(num_classes: int, nf: Optional[int] = 64):
+def resnet101(num_classes: int, nf: Optional[int] = 64, **kwargs):
     model_name = 'ResNet101'
-    return ResNet(num_classes=num_classes, block=Bottleneck, num_blocks=[3, 4, 23, 3], nf=nf), model_name
+    return ResNet(num_classes=num_classes, block=Bottleneck, num_blocks=[3, 4, 23, 3], nf=nf, **kwargs), model_name
