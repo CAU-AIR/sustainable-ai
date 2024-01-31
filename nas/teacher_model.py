@@ -115,7 +115,7 @@ def test(args, net, testloader, device):
     test_latency = 0
     total_samples = 0
     
-    mb_size = args.test_batch_size
+    mb_size = args.batch
     n_samples = args.test_size
     output_dim = max(net.input_channel) * 32
     feats = torch.zeros([n_samples, 2, output_dim], dtype=torch.float32).to(device)
