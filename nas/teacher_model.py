@@ -1,18 +1,21 @@
+import time
 import random
 import argparse
 import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from ofa.utils.run_config import FaceRunConfig
-from ofa.utils.face_data import PairFaceDataset
-import models.networks.resnets as resnet
+from ofa.utils.face_data import PairFaceDataset, FaaceDataProvider
+import models.networks.common_resnet as resnet
 from ofa.utils.common_tools import DistributedMetric
 
-#
+import wandb
+
+
 def train(epoch, net, trainloader, optimizer, device):
     net.train()
     total = 0
@@ -37,9 +40,12 @@ def train(epoch, net, trainloader, optimizer, device):
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
     
-        train_accuracy = 100 * correct / total
-        epoch_loss = running_loss / total_batches
-        print(f'Epoch {epoch + 1}, Batch {batch_idx + 1}/{total_batches} - Loss: {epoch_loss:.4f}, Training accuracy: {train_accuracy:.2f}%')
+    epoch_loss = running_loss / total_batches
+    epoch_accuracy = 100 * correct / total
+
+    print(f'Epoch {epoch + 1} - Average Loss: {epoch_loss:.4f}, Average Training Accuracy: {epoch_accuracy:.2f}%')
+
+    return epoch_loss, epoch_accuracy
 
 
 def face_accuracy(labels, scores, FPRs):
@@ -106,6 +112,8 @@ def get_metric_vals(self, metric_dict, return_dict=False):
 
 def test(args, net, testloader, device):
     net.eval()
+    test_latency = 0
+    total_samples = 0
     
     mb_size = args.test_batch_size
     n_samples = args.test_size
@@ -115,6 +123,8 @@ def test(args, net, testloader, device):
 
     with torch.no_grad():
         for idx, data in  enumerate(testloader):
+            start_time = time.time()
+
             query_x, retrieval_x, labels = data
             query_x, retrieval_x, labels = query_x.to(device), retrieval_x.to(device), labels.to(device)
             
@@ -132,20 +142,32 @@ def test(args, net, testloader, device):
             # measure accuracy
             update_face_metric(metric_dict, feats.cpu())
 
-    return get_metric_vals(metric_dict)
+            test_latency += time.time() - start_time
+            total_samples += len(data[0])
 
+        avg_latency = test_latency / total_samples
+
+    return get_metric_vals(metric_dict), avg_latency
+
+def calculate_model_size(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch", type=int, default=512)
+    parser.add_argument("--batch", type=int, default=64)
+    parser.add_argument("--model", type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50'])
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
+
+    # To solve RuntimeError: cuDNN error: CUDNN_STATUS_INTERNAL_ERROR
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda:1")
@@ -156,11 +178,10 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # train_dataset = CASIAWebFaceDataset(all_files, transform=transform)
-    train_provider = FaceRunConfig()
-    train_dataset = train_provider.data_provider.train_dataset(transform)
+    train_provider = FaaceDataProvider(save_path="/home/heonsung/sustainable-ai/nas/dataset")
+    train_dataset = train_provider.train_dataset(transform)
 
-    test_path = 'dataset/face/test_lfw/'
+    test_path = '/home/heonsung/sustainable-ai/nas/dataset/test_lfw/'
     test_dataset = PairFaceDataset(root=test_path, 
                                    transform=transform, 
                                    data_annot=test_path)
@@ -169,26 +190,48 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
-    n_classes = train_provider.data_provider.n_classes
-    teacher_model = resnet.ResNet50(n_classes)
+    n_classes = train_provider.n_classes
+    teacher_model, model_name = resnet.__dict__[args.model](n_classes)
     teacher_model = nn.DataParallel(teacher_model)
     teacher_model.to(device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(teacher_model.parameters(), lr=0.001, momentum=0.9)
 
-    best_accuracy = 0.0
     num_epochs = 50
+    best_accuracy = 0.
+    total_latency = 0.
+
+    model_size = calculate_model_size(teacher_model)
+
+    print('*'*8)
+    print('Model : ', model_name)
+    print(f'Model Size: {model_size} parameters')
+    print('*'*8)
+
+    logs = wandb
+    login_key = '1623b52d57b487ee9678660beb03f2f698fcbeb0'
+    logs.login(key=login_key)
+    wandb.init(config=args, project='ResNet for OFA Dist', name=model_name)
 
     for epoch in range(num_epochs):
         print('epoch : ', epoch)
-        train(epoch, teacher_model, train_loader, optimizer, device)
+        train_loss, train_accuracy = train(epoch, teacher_model, train_loader, optimizer, device)
         # val_accuracy = validate(teacher_model, valid_loader, device)
-        test_accuracy, _ = test(args, teacher_model, test_loader, device)
+        test_accuracy, _, avg_latency = test(args, teacher_model, test_loader, device)
+
+        total_latency += avg_latency
+
+        logs.log({"Train Loss": train_loss})
+        logs.log({"Train Acc": train_accuracy})
+        logs.log({"Test Acc": test_accuracy})
+
 
         if test_accuracy > best_accuracy:
             best_accuracy = test_accuracy
             torch.save(teacher_model.state_dict(), 'best_model.pth.tar')
 
-    print(f'Saved Best Model with Test Accuracy: {best_accuracy:.2f}%')
+    epoch_latency = total_latency / num_epochs
+    logs.log({"Model Size": model_size, "Latency": epoch_latency})
 
+    print(f'Saved Best Model with Test Accuracy: {best_accuracy:.2f}%')
