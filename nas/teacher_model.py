@@ -11,8 +11,8 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from ofa.utils.face_data import PairFaceDataset, FaaceDataProvider
-# import models.networks.common_resnet as resnet
-import models.networks.resnets as resnet
+import models.networks.common_resnet as resnet
+# import models.networks.resnets as resnet
 from ofa.utils.common_tools import DistributedMetric
 
 import wandb
@@ -137,8 +137,10 @@ def test(args, net, testloader, device, test_dataset):
             query_x, retrieval_x, labels = query_x.to(device), retrieval_x.to(device), labels.to(device)
             
             # compute output
-            qeury_feat = net(query_x, outputs='features')
-            retrieval_feat = net(retrieval_x, outputs='features')
+            # qeury_feat = net(query_x, outputs='features')
+            # retrieval_feat = net(retrieval_x, outputs='features')
+            qeury_feat = net.features(query_x)
+            retrieval_feat = net.features(retrieval_x)
 
             batch_start_idx = idx * mb_size
             actual_batch_size = qeury_feat.size(0)
@@ -164,8 +166,9 @@ def calculate_model_size(model):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch", type=int, default=64)
+    parser.add_argument("--batch", type=int, default=128)
     parser.add_argument("--model", type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50'])
+    
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -189,10 +192,10 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    train_provider = FaaceDataProvider(save_path="/home/heonsung/sustainable-ai/nas/dataset")
+    train_provider = FaaceDataProvider(save_path="/home/ml/sustainable-ai/nas/dataset")
     train_dataset = train_provider.train_dataset(transform)
 
-    test_path = '/home/heonsung/sustainable-ai/nas/dataset/test_lfw/'
+    test_path = '/home/ml/sustainable-ai/nas/dataset/test_lfw/'
     test_dataset = PairFaceDataset(root=test_path, 
                                    transform=transform, 
                                    data_annot=test_path)
@@ -201,9 +204,8 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=args.batch, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
-    # n_classes = train_provider.n_classes
-    # teacher_model, model_name = resnet.__dict__[args.model](n_classes)
-    teacher_model = resnet.ResNet50(n_classes=10575)
+    n_classes = train_provider.n_classes
+    teacher_model, model_name = resnet.__dict__[args.model](n_classes)
     teacher_model = nn.DataParallel(teacher_model)
     teacher_model.to(device)
 
@@ -215,6 +217,9 @@ if __name__ == "__main__":
     total_latency = 0.
 
     model_size = calculate_model_size(teacher_model)
+    
+    args.save_path = "exp/" + args.model
+    os.makedirs(args.path, exist_ok=True)
 
     logs = wandb
     login_key = '1623b52d57b487ee9678660beb03f2f698fcbeb0'
@@ -236,7 +241,7 @@ if __name__ == "__main__":
 
         if test_accuracy[0] > best_accuracy:
             best_accuracy = test_accuracy[0]
-            torch.save(teacher_model.state_dict(), 'best_model.pth.tar')
+            torch.save(teacher_model.state_dict(), args.save_path + '/best_model.pth.tar')
 
     epoch_latency = total_latency / num_epochs
     logs.log({"Model Size": model_size, "Latency": epoch_latency})

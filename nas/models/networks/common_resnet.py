@@ -73,7 +73,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, num_classes, block, num_blocks, nf, zero_init_residual=False):
+    def __init__(self, num_classes, block, num_blocks, nf):
         super(ResNet, self).__init__()
         self.in_planes = nf
 
@@ -89,20 +89,6 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.last = nn.Linear(self.feature_size, self.num_classes)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-        if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck):
-                    nn.init.constant_(m.bn3.weight, 0)
-                elif isinstance(m, BasicBlock):
-                    nn.init.constant_(m.bn2.weight, 0)
-
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
@@ -110,24 +96,24 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-
-    def forward(self, x, outputs='features'):
-        feats = relu(self.bn1(self.conv1(x)))
-        feats = self.layer1(feats)
-        feats = self.layer2(feats)
-        feats = self.layer3(feats)
-        feats = self.layer4(feats)
-        feats = self.avgpool(feats)
-        feats = torch.flatten(feats, 1)
+    
+    def features(self, x):
+        '''Features before FC layers'''
+        out = relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.avgpool(out)
+        out = torch.flatten(out, 1)
         
-        if outputs == 'features':
-            return feats
+        return out
 
-        out = self.last(feats)
-        if outputs == 'logits':
-            return out
-        elif outputs == 'both':
-            return (out, feats)
+    def forward(self, x):
+        out = self.features(x)
+        out = self.last(out)
+
+        return out
 
 
 # @register_model("resnet18")
