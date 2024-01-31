@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import argparse
@@ -39,6 +40,11 @@ def train(epoch, net, trainloader, optimizer, device):
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
+        
+        batch_loss = loss.item()
+        batch_accuracy = 100 * (predicted == labels).sum().item() / labels.size(0)
+        print(f'Epoch {epoch + 1}, Batch {batch_idx + 1}/{total_batches} - Loss: {batch_loss:.4f}, Accuracy: {batch_accuracy:.2f}%')
+
     
     epoch_loss = running_loss / total_batches
     epoch_accuracy = 100 * correct / total
@@ -156,7 +162,7 @@ def calculate_model_size(model):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch", type=int, default=64)
+    parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--model", type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50'])
     args = parser.parse_args()
 
@@ -168,6 +174,8 @@ if __name__ == "__main__":
     # To solve RuntimeError: cuDNN error: CUDNN_STATUS_INTERNAL_ERROR
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
+    
+    os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda:1")
@@ -178,10 +186,10 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    train_provider = FaaceDataProvider(save_path="/home/heonsung/sustainable-ai/nas/dataset")
+    train_provider = FaaceDataProvider(save_path="/home/ml/sustainable-ai/nas/dataset")
     train_dataset = train_provider.train_dataset(transform)
 
-    test_path = '/home/heonsung/sustainable-ai/nas/dataset/test_lfw/'
+    test_path = '/home/ml/sustainable-ai/nas/dataset/test_lfw/'
     test_dataset = PairFaceDataset(root=test_path, 
                                    transform=transform, 
                                    data_annot=test_path)
