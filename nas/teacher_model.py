@@ -139,8 +139,8 @@ def test(args, net, testloader, device, test_dataset):
             # compute output
             # qeury_feat = net(query_x, outputs='features')
             # retrieval_feat = net(retrieval_x, outputs='features')
-            qeury_feat = net.features(query_x)
-            retrieval_feat = net.features(retrieval_x)
+            qeury_feat = net.module.features(query_x)
+            retrieval_feat = net.module.features(retrieval_x)
 
             batch_start_idx = idx * mb_size
             actual_batch_size = qeury_feat.size(0)
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     model_size = calculate_model_size(teacher_model)
     
     args.save_path = "exp/" + args.model
-    os.makedirs(args.path, exist_ok=True)
+    os.makedirs(args.save_path, exist_ok=True)
 
     logs = wandb
     login_key = '1623b52d57b487ee9678660beb03f2f698fcbeb0'
@@ -237,7 +237,8 @@ if __name__ == "__main__":
         logs.log({"Train Loss": train_loss})
         logs.log({"Train Acc": train_accuracy})
         logs.log({"Test Acc": test_accuracy[0]})
-
+        
+        print(f'Epoch {epoch + 1} - Test Accuracy: {test_accuracy[0]:.2f}%')
 
         if test_accuracy[0] > best_accuracy:
             best_accuracy = test_accuracy[0]
