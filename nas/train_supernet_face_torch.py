@@ -23,7 +23,7 @@ parser.add_argument("--pocketnet", action="store_false")
 
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--batch_size", type=int, default=128)
+parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--dataset", type=str, default="face")  # train: CASIAWebFace / test : LFW
 parser.add_argument("--n_classes", type=int, default=10575)  # face train = casiaweb: 10575
 parser.add_argument("--resume", action="store_true")
@@ -179,6 +179,7 @@ if __name__ == "__main__":
         expand_ratio_list = args.expand_list,
         width_mult_list = args.width_mult_list
     )
+    net = torch.nn.DataParallel(net)
 
     if args.kd_ratio > 0:
 
@@ -189,13 +190,10 @@ if __name__ == "__main__":
         args.teacher_model.load_state_dict(init, strict=False)
         args.teacher_model.cuda()
 
-    compression = None
-
     distributed_run_manager = DistributedRunManager(
         args.path,      # save path : exp/kernel2kernel_depth/phase1
         net,            # OFAResNets
         run_config,     # DistributedCasiaWebRunConfig(CasiaWebRunConfig(RunConfig)) : data_provider, learning_rate, train_loader, valid_loader, test_loader, random_sub_train_loader?, build_optimizer
-        compression,    # None
         backward_steps=args.dynamic_batch_size, # 2
         is_root=True,
     )
@@ -239,7 +237,7 @@ if __name__ == "__main__":
         else sorted({64, 112}),
         "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
         "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
-        "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
+        "depth_list": sorted({min(net.module.depth_list), max(net.module.depth_list)}),
     }
 
     if args.task == "kernel":

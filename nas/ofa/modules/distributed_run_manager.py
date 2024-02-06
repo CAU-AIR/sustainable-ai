@@ -40,13 +40,10 @@ class DistributedRunManager:
         path,
         net,
         run_config,
-        hvd_compression,
         backward_steps=1,
         is_root=False,
         init=True,
     ):
-        import horovod.torch as hvd
-
         self.path = path
         self.net = net
         self.run_config = run_config
@@ -113,12 +110,6 @@ class DistributedRunManager:
                     if param.requires_grad:
                         net_params.append(param)
         self.optimizer = self.run_config.build_optimizer(net_params)
-        self.optimizer = hvd.DistributedOptimizer(
-            self.optimizer,
-            named_parameters=self.net.named_parameters(),
-            compression=hvd_compression,
-            backward_passes_per_step=backward_steps,
-        )
 
     """ save path and log path """
 
@@ -164,7 +155,7 @@ class DistributedRunManager:
 
             try:
                 net_save_path = os.path.join(self.path, "net.config")
-                net_config = self.net.config
+                net_config = self.net.module.config
                 if extra_net_config is not None:
                     net_config.update(extra_net_config)
                 json.dump(net_config, open(net_save_path, "w"), indent=4)

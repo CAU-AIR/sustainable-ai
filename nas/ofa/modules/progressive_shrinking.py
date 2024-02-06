@@ -171,7 +171,7 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
                 # set random seed before sampling
                 subnet_seed = int("%d%.3d%.3d" % (epoch * nBatch + i, _, 0))
                 random.seed(subnet_seed)
-                subnet_settings = dynamic_net.sample_active_subnet()    # get subnet
+                subnet_settings = dynamic_net.module.sample_active_subnet()    # get subnet
                 subnet_str += (
                     "%d: " % _
                     + ",".join(

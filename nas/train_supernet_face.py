@@ -28,6 +28,7 @@ parser.add_argument("--batch_size", type=int, default=256)
 parser.add_argument("--dataset", type=str, default="face")  # train: CASIAWebFace / test : LFW
 parser.add_argument("--n_classes", type=int, default=10575)  # face train = casiaweb: 10575
 parser.add_argument("--resume", action="store_true")
+parser.add_argument("--kd_ratio", type=int, default=1, choices=[0,1], help='1: Using Distillation / 0: Not using distillation')
 
 args = parser.parse_args()
 
@@ -94,9 +95,7 @@ args.no_nesterov = False
 args.dy_conv_scaling_mode = 1
 args.width_mult_list = "1.0"
 
-# args.kd_ratio = 1.0
-args.kd_ratio = 0
-args.teacher_path = ''
+args.teacher_path = "exp/%s/best_model.pth.tar" % args.task
 args.kd_type = "ce"
 
 args.test_frequency = 1
@@ -186,11 +185,12 @@ if __name__ == "__main__":
     )
 
     if args.kd_ratio > 0:
-        import torchvision.models as models
-        args.teacher_model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V2) # 수정필요
+
+        import models.networks.common_resnet as resnet
+        args.teacher_model = resnet.resnet50(args.n_classes)
         args.teacher_model.cuda()
-        # init = torch.load(args.teacher_path, map_location="cpu")["state_dict"]
-        # args.teacher_model.load_state_dict(init)
+        init = torch.load(args.teacher_path, map_location="cpu")["state_dict"]
+        args.teacher_model.load_state_dict(init)
 
     compression = hvd.Compression.none
 

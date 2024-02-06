@@ -298,11 +298,11 @@ class DistributedMetric(object):
         self.name = name
         self.sum = torch.zeros(1)[0]
         self.count = torch.zeros(1)[0]
-        self.hvd_installed = True
-        try:
-            import horovod.torch as hvd
-        except ImportError:
-            self.hvd_installed = False
+        self.hvd_installed = False
+        # try:
+        #     import horovod.torch as hvd
+        # except ImportError:
+        #     self.hvd_installed = False
 
     def update(self, val, delta_n=1):
         if not isinstance(val, torch.Tensor):
