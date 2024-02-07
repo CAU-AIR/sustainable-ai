@@ -23,7 +23,7 @@ parser.add_argument("--pocketnet", action="store_false")
 
 # genereal settings
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--batch_size", type=int, default=64)
+parser.add_argument("--batch_size", type=int, default=256)
 parser.add_argument("--dataset", type=str, default="face")  # train: CASIAWebFace / test : LFW
 parser.add_argument("--n_classes", type=int, default=10575)  # face train = casiaweb: 10575
 parser.add_argument("--resume", action="store_true")
@@ -183,11 +183,13 @@ if __name__ == "__main__":
 
     if args.kd_ratio > 0:
 
-        import models.networks.common_resnet as resnet
-        args.teacher_model, _ = resnet.resnet50(args.n_classes)
+        # import models.networks.common_resnet as resnet
+        # args.teacher_model, _ = resnet.resnet50(args.n_classes)
         # init = torch.load(args.teacher_path, map_location="cpu")["state_dict"]
-        init = torch.load(args.teacher_path, map_location="cpu")["state_dict"]
-        args.teacher_model.load_state_dict(init, strict=False)
+        # args.teacher_model.load_state_dict(init, strict=False)
+
+        # from torchvision.models import resnet
+        # args.teacher_model = resnet.resnet152(pretrained=True)
         args.teacher_model.cuda()
 
     distributed_run_manager = DistributedRunManager(

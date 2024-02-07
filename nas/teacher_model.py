@@ -11,12 +11,13 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from ofa.utils.face_data import PairFaceDataset, FaaceDataProvider
-import models.networks.common_resnet as resnet
-# import models.networks.resnets as resnet
+# import models.networks.common_resnet as resnet
+import models.networks.resnets as resnet
 from ofa.utils.common_tools import DistributedMetric
 
 import wandb
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 def train(epoch, net, trainloader, optimizer, device):
     net.train()
@@ -32,8 +33,14 @@ def train(epoch, net, trainloader, optimizer, device):
         optimizer.zero_grad()
 
         outputs = net(inputs)
-
+        
         loss = criterion(outputs, labels)
+        
+        print('*'*8)
+        print(loss)
+        print(loss.shape)
+        print('*'*8)
+        
         loss.backward()
         optimizer.step()
 
@@ -167,7 +174,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--batch", type=int, default=128)
-    parser.add_argument("--model", type=str, default='resnet50', choices=['resnet18', 'resnet34', 'resnet50'])
+    parser.add_argument("--model", type=str, default='ResNet50', choices=['resnet18', 'resnet34', 'resnet50'])
     
     args = parser.parse_args()
 
@@ -205,7 +212,8 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
     n_classes = train_provider.n_classes
-    teacher_model, model_name = resnet.__dict__[args.model](n_classes)
+    # teacher_model, model_name = resnet.__dict__[args.model](n_classes)
+    teacher_model = resnet.__dict__[args.model](n_classes=n_classes)
     teacher_model = nn.DataParallel(teacher_model)
     teacher_model.to(device)
 
