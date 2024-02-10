@@ -11,8 +11,8 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from ofa.utils.face_data import PairFaceDataset, FaaceDataProvider
-# import models.networks.common_resnet as resnet
-import models.networks.resnets as resnet
+import models.networks.common_resnet as resnet
+# import models.networks.resnets as resnet
 from ofa.utils.common_tools import DistributedMetric
 
 import wandb
@@ -35,11 +35,6 @@ def train(epoch, net, trainloader, optimizer, device):
         outputs = net(inputs)
         
         loss = criterion(outputs, labels)
-        
-        print('*'*8)
-        print(loss)
-        print(loss.shape)
-        print('*'*8)
         
         loss.backward()
         optimizer.step()
@@ -173,8 +168,8 @@ def calculate_model_size(model):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch", type=int, default=128)
-    parser.add_argument("--model", type=str, default='ResNet50', choices=['resnet18', 'resnet34', 'resnet50'])
+    parser.add_argument("--batch", type=int, default=512)
+    parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'])
     
     args = parser.parse_args()
 
@@ -188,7 +183,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2"
+    os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda:1")
@@ -212,8 +207,8 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
     n_classes = train_provider.n_classes
-    # teacher_model, model_name = resnet.__dict__[args.model](n_classes)
-    teacher_model = resnet.__dict__[args.model](n_classes=n_classes)
+    teacher_model, model_name = resnet.__dict__[args.model](n_classes)
+    # teacher_model = resnet.__dict__[args.model](n_classes=n_classes)
     teacher_model = nn.DataParallel(teacher_model)
     teacher_model.to(device)
 
@@ -232,8 +227,8 @@ if __name__ == "__main__":
     logs = wandb
     login_key = '1623b52d57b487ee9678660beb03f2f698fcbeb0'
     logs.login(key=login_key)
-    # wandb.init(config=args, project='ResNet for OFA Dist', name=model_name)
-    wandb.init(config=args, project='ResNet for OFA Dist', name='ResNet50')
+    wandb.init(config=args, project='ResNet for OFA Dist', name=model_name)
+    # wandb.init(config=args, project='ResNet for OFA Dist', name='ResNet50')
 
     for epoch in range(num_epochs):
         train_loss, train_accuracy = train(epoch, teacher_model, train_loader, optimizer, device)
