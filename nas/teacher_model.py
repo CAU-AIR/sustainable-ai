@@ -17,7 +17,7 @@ from ofa.utils.common_tools import DistributedMetric
 
 import wandb
 
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 def train(epoch, net, trainloader, optimizer, device):
     net.train()
@@ -179,11 +179,11 @@ if __name__ == "__main__":
     random.seed(args.seed)
 
     # To solve RuntimeError: cuDNN error: CUDNN_STATUS_INTERNAL_ERROR
-    # torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.enabled = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+    os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2"
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda:1")
@@ -194,10 +194,10 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    train_provider = FaaceDataProvider(save_path="/home/ml/sustainable-ai/nas/dataset")
+    train_provider = FaaceDataProvider(save_path="/home/heonsung/sustainable-ai/nas/dataset/")
     train_dataset = train_provider.train_dataset(transform)
 
-    test_path = '/home/ml/sustainable-ai/nas/dataset/test_lfw/'
+    test_path = '/home/heonsung/sustainable-ai/nas/dataset/test_lfw/'
     test_dataset = PairFaceDataset(root=test_path, 
                                    transform=transform, 
                                    data_annot=test_path)
